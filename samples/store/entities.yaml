@@ -1,0 +1,6 @@
+# The entity tree. "kind" is any label you like. Each entity's documents go in a folder named after its id.
+- {id: doe, name: Department of Education, kind: department}
+- {id: district-a, name: District A, kind: district, parent: doe}
+- {id: lincoln-elementary, name: Lincoln Elementary, kind: school, parent: district-a}
+- {id: roosevelt-high, name: Roosevelt High, kind: school, parent: district-a}
+- {id: westside-charter, name: Westside Charter, kind: school, parent: doe}

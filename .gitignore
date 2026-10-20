@@ -1,0 +1,10 @@
+.env
+models/*
+!models/README.md
+*.xlsx
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+eval/private/
+.DS_Store

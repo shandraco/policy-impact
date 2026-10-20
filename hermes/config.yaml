@@ -1,0 +1,41 @@
+# Hermes, locked down. Mounted read-only; its SHA-256 is checked by the hermes-check service before Hermes starts.
+# Keys checked against Hermes source at commit 0319e113 (2026-10-20). Re-check when HERMES_REF changes.
+model:
+  provider: custom
+  default: chat
+  base_url: http://policy-api:8000/gate/v1     # the model gate, never vLLM directly
+  api_key: ${POLICY_GATE_KEY}
+
+agent:
+  max_turns: 4                 # the Policy API also caps tool and model calls per turn
+
+platform_toolsets:
+  api_server: [policy_tools]   # the only toolset: no terminal, files, web, browser, code, skills or delegation
+
+plugins:
+  enabled: [policy_tools]
+  auto_update_check_hours: 0
+
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+  nudge_interval: 0
+
+curator:
+  enabled: false
+
+compression:
+  enabled: false               # history is trimmed by Open WebUI and the gate, in code
+
+delegation:
+  max_iterations: 0
+  max_concurrent_children: 0
+
+model_catalog:
+  enabled: false
+
+auxiliary:                     # every side task uses the main (gated) model, never OpenRouter
+  title_generation: {provider: main}
+  compression: {provider: main}
+  vision: {provider: main}
+  web_extract: {provider: main}

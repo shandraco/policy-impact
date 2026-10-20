@@ -1,0 +1,142 @@
+# Policy impact: one command brings up everything except the GPU models (see compose.gpu.yaml).
+#   cp .env.example .env    # then fill in every value marked CHANGE
+#   docker compose up -d --build
+#   docker compose -f compose.yaml -f compose.gpu.yaml up -d     # with the real models
+# People reach only the proxy. Every other container is on internal networks with no internet.
+
+x-api: &api
+  build: ./policy_api
+  image: policy-impact-api
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://pi_app:${PI_APP_PASSWORD}@db:5432/policy
+    DOC_STORE: /docs
+  volumes:
+    - ${DOC_STORE_DIR:-./samples/store}:/docs:ro
+    - ./eval:/eval:ro
+  depends_on:
+    migrate: {condition: service_completed_successfully}
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: policy
+      POSTGRES_USER: policy_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PI_APP_PASSWORD: ${PI_APP_PASSWORD:?set PI_APP_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U policy_owner -d policy"]
+      interval: 5s
+      retries: 20
+
+  migrate:                     # runs once as the table owner, then exits; the app itself can't change tables
+    image: policy-impact-api
+    build: ./policy_api
+    command: ["python", "-m", "app.migrate_cli"]
+    environment:
+      MIGRATE_DATABASE_URL: postgresql://policy_owner:${POSTGRES_PASSWORD}@db:5432/policy
+    depends_on:
+      db: {condition: service_healthy}
+    networks: [data]
+
+  policy-api:
+    <<: *api
+    networks: [data, models, agent, edge]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen(urllib.request.Request('http://localhost:8000/health', headers={'Host': 'policy-api'}))"]
+      interval: 15s
+      retries: 10
+
+  worker:                      # ingest every 15 minutes, impact runs, review-queue alerts
+    <<: *api
+    command: ["python", "-m", "app.worker"]
+    networks: [data, models]
+
+  hermes-check:                # Hermes doesn't start unless its settings and plugin match the reviewed hashes
+    image: busybox:1.37
+    command: ["sh", "-c", "cd / && sha256sum -c /check/SHA256SUMS"]
+    volumes:
+      - ./hermes:/check:ro
+    network_mode: none
+
+  hermes:
+    build:
+      context: https://github.com/NousResearch/hermes-agent.git#${HERMES_REF:-0319e113c9602b86ffda350e931cb4b035e1d5d8}
+    image: hermes-agent:${HERMES_REF:-0319e113c9602b86ffda350e931cb4b035e1d5d8}
+    restart: unless-stopped
+    command: ["gateway", "run"]
+    security_opt: [no-new-privileges:true]
+    environment:
+      HERMES_UID: "10000"
+      HERMES_GID: "10000"
+      API_SERVER_ENABLED: "true"
+      API_SERVER_HOST: 0.0.0.0
+      API_SERVER_KEY: ${HERMES_API_KEY:?set HERMES_API_KEY in .env}
+      POLICY_GATE_KEY: ${GATE_KEY}
+      POLICY_TOOL_KEY: ${TOOL_KEY}
+      POLICY_API_URL: http://policy-api:8000
+    volumes:
+      - hermes-data:/opt/data
+      - ./hermes/config.yaml:/opt/data/config.yaml:ro
+      - ./hermes/SOUL.md:/opt/data/SOUL.md:ro
+      - ./hermes/plugins/policy_tools:/opt/data/plugins/policy_tools:ro
+    depends_on:
+      hermes-check: {condition: service_completed_successfully}
+      policy-api: {condition: service_healthy}
+    networks: [agent]
+
+  open-webui:
+    image: ${OPENWEBUI_IMAGE:?set OPENWEBUI_IMAGE in .env to a pinned version}
+    restart: unless-stopped
+    env_file: openwebui/openwebui.env
+    environment:
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?set WEBUI_SECRET_KEY in .env}
+      WEBUI_URL: ${PUBLIC_BASE_URL}
+      OPENAI_API_BASE_URLS: http://hermes:8642/v1
+      OPENAI_API_KEYS: ${HERMES_API_KEY}
+      OPENID_PROVIDER_URL: ${OPENID_PROVIDER_URL}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET}
+      OAUTH_PROVIDER_NAME: ${OAUTH_PROVIDER_NAME:-Sign in}
+      OAUTH_ALLOWED_DOMAINS: ${OAUTH_ALLOWED_DOMAINS:-*}
+    volumes:
+      - owui-data:/app/backend/data
+    # "signin" is the one network with a way out: Open WebUI must reach your sign-in provider to finish a login.
+    # It holds no policy files. Limit it to the provider's addresses with scripts/firewall.sh.
+    networks: [agent, edge, signin]
+
+  proxy:                       # the only published port. Serves Open WebUI, /review and /exports; nothing else
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run]
+    volumes:
+      - ./proxy/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "${PUBLIC_PORT:-8080}:8080"
+    networks: [edge, public]
+
+networks:
+  public: {}                   # host-facing, proxy only
+  signin:                      # Open WebUI's route to the sign-in provider; fixed range so the firewall can name it
+    ipam: {config: [{subnet: 172.31.250.0/24}]}
+  edge: {internal: true}       # proxy <-> Open WebUI, policy-api
+  agent: {internal: true}      # Open WebUI <-> Hermes <-> policy-api
+  models: {internal: true}     # policy-api, worker <-> vLLM, embeddings
+  data: {internal: true}       # policy-api, worker, migrate <-> Postgres
+
+volumes:
+  pgdata: {}
+  hermes-data: {}
+  owui-data: {}

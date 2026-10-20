@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Policy assistant without Hermes</title>
+<link rel="stylesheet" href="fonts.css">
+<style>
+  @page { size: Letter; margin: 13mm 14mm 14mm; }
+  :root {
+    --ink: #1b2430; --muted: #5b6573; --line: #c9cfd6; --soft: #f3f4f6;
+    --ow: #b4541a; --ow-soft: #fbeee4; --hermes: #3d5a80; --hermes-soft: #e8eef6;
+    --engine: #2f6f5e; --engine-soft: #e5f2ee; --seal: #8a94a3;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 9.4pt/1.42 "IBM Plex Sans", sans-serif; color: var(--ink); background: #fff; }
+  h1 { font: 600 25pt/1.15 "IBM Plex Serif", serif; margin: 0 0 6pt; letter-spacing: -0.01em; }
+  h2 { font: 600 14pt/1.2 "IBM Plex Serif", serif; margin: 14pt 0 5pt; padding-top: 6pt; border-top: 2px solid var(--ink); }
+  h3 { font-size: 10.5pt; font-weight: 600; margin: 12pt 0 4pt; }
+  p { margin: 0 0 7pt; }
+  ul, ol { margin: 0 0 8pt; padding-left: 15pt; }
+  li { margin-bottom: 3pt; }
+  code, pre { font-family: "IBM Plex Mono", monospace; font-size: 8.6pt; }
+  code { background: var(--soft); padding: 0 3px; border-radius: 2px; }
+  pre { background: var(--soft); border-left: 3px solid var(--ow); padding: 8pt 10pt; margin: 0 0 8pt; white-space: pre; line-height: 1.4; }
+  table { width: 100%; border-collapse: collapse; margin: 4pt 0 10pt; font-size: 9pt; }
+  th, td { text-align: left; vertical-align: top; padding: 4pt 6pt; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; border-bottom: 1.5px solid var(--ink); }
+  .kicker { font: 500 8.5pt "IBM Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ow); margin-bottom: 8pt; }
+  .meta { color: var(--muted); font-size: 9pt; margin-bottom: 14pt; }
+  .lede { font-size: 10.6pt; line-height: 1.5; margin-bottom: 12pt; }
+  .callout { border: 1px solid var(--line); border-left: 4px solid var(--ow); background: var(--ow-soft); padding: 8pt 10pt; margin: 8pt 0 10pt; }
+  .callout.warn { border-left-color: var(--hermes); background: var(--hermes-soft); }
+  .grid2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12pt; }
+  .grid2 > * { min-width: 0; }
+  .grid2, .callout, table, pre { margin-right: 2px; }
+  .card code { white-space: normal; word-break: break-word; }
+  .card { border: 1px solid var(--line); padding: 8pt 10pt; }
+  .card h3 { margin-top: 0; }
+  .page { break-before: page; }
+  figure { margin: 6pt 0 10pt; break-inside: avoid; }
+  figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 4pt; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { font-family: "IBM Plex Sans", sans-serif; }
+  .avoid { break-inside: avoid; }
+  .legend { display: flex; gap: 14pt; font-size: 8.5pt; color: var(--muted); margin-top: 4pt; flex-wrap: wrap; }
+  .sw { display: inline-block; width: 10px; height: 10px; vertical-align: -1px; margin-right: 4px; border: 1px solid; }
+</style>
+
+</head>
+<body>
+
+<div class="kicker">policy-impact · design proposal · no-Hermes option</div>
+<h1>One assistant for policies,<br>documents and spreadsheets</h1>
+<div class="meta">20 October 2026 · Draft for discussion · An alternative to the Hermes-based policy-impact build</div>
+
+<p class="lede">The scope grows from comparing policies to helping staff <strong>write policies, build documents and spreadsheets, and edit them</strong> in the tools they open every day. For that scope we propose dropping Hermes and running <strong>one assistant of our own, built with LangGraph, that is also the Overwatch</strong>. Staff work in a chat window and in a document editor, and every change the assistant suggests is shown first and applied only when a person accepts it.</p>
+
+<h3>Decisions in this proposal</h3>
+<ul>
+  <li><strong>One agent, not two layers.</strong> Our own LangGraph graph understands the request, calls tools, checks the result and asks for approval. The tool gate and answer checks are part of it, not a guard around someone else's agent.</li>
+  <li><strong>The model suggests; code makes the change; a person accepts.</strong> The v0.1 rule that code builds every answer now covers editing too. The model never writes a file directly.</li>
+  <li><strong>A document editor next to the chat.</strong> Staff open, view and edit Word and Excel files in a self-hosted browser editor, with an optional assistant pane inside desktop Word and Excel later.</li>
+  <li><strong>Use cases are packs.</strong> Policy impact, policy writing, documents, spreadsheets and each outside tool are separate packs with their own tools, checks and approval rules.</li>
+  <li><strong>Everything stays on the sealed network</strong> unless the client decides that Microsoft 365 is allowed.</li>
+</ul>
+
+<h3>Why drop Hermes for this scope</h3>
+<ul>
+  <li><strong>The control is the real work.</strong> The tool gate, checks, approvals and audit would be built anyway. Without Hermes they become the assistant instead of a fence around a large, weekly-released codebase that is not being reviewed.</li>
+  <li><strong>Knowing who is asking is built in.</strong> No signed-token workaround is needed to tell tool calls which person and chat they belong to.</li>
+  <li><strong>Outside tools become safe to add.</strong> Each connector (an MCP server or a small adapter) is a tool behind our own gate, switched on per pack and per user.</li>
+  <li><strong>Less to lock down.</strong> No Hermes settings list, no read-only config checks, no stray outbound calls to switch off.</li>
+</ul>
+<div class="callout">
+  <strong>What we give up.</strong> Hermes provides a ready-made agent loop, chat-title and housekeeping tasks, and an OpenAI-compatible API. A LangGraph agent loop is a small amount of code, and the OpenAI-compatible endpoint is a thin FastAPI layer, so the cost is a few days of build, paid back in a smaller system we fully understand.
+</div>
+
+<!-- ============ SYSTEM ============ -->
+<section class="page">
+<h2>System architecture</h2>
+<p>Everything below the proxy runs on the client's GPU server under Docker Compose, on internal networks with no route to the internet. Staff reach three front ends through the proxy; all three talk to the same assistant.</p>
+<figure>
+<svg viewBox="0 0 1000 800" role="img" aria-label="System architecture without Hermes">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1b2430"/></marker>
+    <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b4541a"/></marker>
+  </defs>
+  <rect x="30" y="14" width="250" height="56" rx="4" fill="#fff" stroke="#1b2430" stroke-width="1.4"/>
+  <text x="155" y="38" text-anchor="middle" font-size="15" font-weight="600">Staff browser / Office</text>
+  <text x="155" y="57" text-anchor="middle" font-size="11.5" fill="#5b6573">ask · open · edit · accept</text>
+  <rect x="370" y="14" width="300" height="56" rx="4" fill="#fff" stroke="#1b2430" stroke-width="1.4"/>
+  <text x="520" y="38" text-anchor="middle" font-size="15" font-weight="600">nginx proxy</text>
+  <text x="520" y="57" text-anchor="middle" font-size="11.5" fill="#5b6573">the only service staff can reach</text>
+  <line x1="280" y1="42" x2="366" y2="42" stroke="#1b2430" stroke-width="1.4" marker-end="url(#a)" marker-start="url(#a)"/>
+
+  <rect x="14" y="96" width="972" height="692" rx="8" fill="none" stroke="#8a94a3" stroke-width="1.4" stroke-dasharray="7 5"/>
+  <rect x="30" y="87" width="430" height="18" fill="#fff"/>
+  <text x="38" y="100" font-size="11.5" font-weight="600" fill="#5b6573" letter-spacing=".04em">SEALED NETWORK · internal networks · no route out</text>
+
+  <!-- front ends -->
+  <text x="40" y="128" font-size="12" font-weight="600" fill="#5b6573" letter-spacing=".05em">FRONT ENDS</text>
+  <rect x="40" y="138" width="290" height="84" rx="4" fill="#f3f4f6" stroke="#1b2430" stroke-width="1.4"/>
+  <text x="58" y="162" font-size="14.5" font-weight="600">Open WebUI</text>
+  <text x="58" y="181" font-size="11.5">Chat: ask, request a document,</text>
+  <text x="58" y="197" font-size="11.5">approve, download</text>
+  <text x="58" y="213" font-size="11" fill="#5b6573">cut down by settings + CSS</text>
+
+  <rect x="355" y="138" width="290" height="84" rx="4" fill="#f3f4f6" stroke="#1b2430" stroke-width="1.4"/>
+  <text x="373" y="162" font-size="14.5" font-weight="600">Document editor</text>
+  <text x="373" y="181" font-size="11.5">OnlyOffice Docs or Collabora Online</text>
+  <text x="373" y="197" font-size="11.5">Open, view, co-edit .docx / .xlsx</text>
+  <text x="373" y="213" font-size="11" fill="#5b6573">suggestions shown as tracked changes</text>
+
+  <rect x="670" y="138" width="290" height="84" rx="4" fill="#fff" stroke="#1b2430" stroke-dasharray="6 4"/>
+  <text x="688" y="162" font-size="14.5" font-weight="600" fill="#5b6573">Office add-in (later)</text>
+  <text x="688" y="181" font-size="11.5" fill="#5b6573">Assistant pane inside desktop</text>
+  <text x="688" y="197" font-size="11.5" fill="#5b6573">Word and Excel</text>
+  <text x="688" y="213" font-size="11" fill="#5b6573">hosted on the proxy, deployed by IT</text>
+
+  <line x1="185" y1="224" x2="185" y2="262" stroke="#1b2430" stroke-width="1.4" marker-end="url(#a)" marker-start="url(#a)"/>
+  <line x1="500" y1="224" x2="500" y2="262" stroke="#1b2430" stroke-width="1.4" marker-end="url(#a)" marker-start="url(#a)"/>
+  <line x1="815" y1="224" x2="815" y2="262" stroke="#1b2430" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#a)" marker-start="url(#a)"/>
+
+  <!-- agent -->
+  <rect x="40" y="266" width="920" height="150" rx="6" fill="#fbeee4" stroke="#b4541a" stroke-width="2"/>
+  <text x="58" y="291" font-size="16" font-weight="700" fill="#b4541a">Assistant + Overwatch</text>
+  <g font-size="12" text-anchor="middle">
+    <rect x="58"  y="306" width="112" height="40" rx="3" fill="#fff" stroke="#b4541a"/><text x="114" y="331">Classify</text>
+    <rect x="182" y="306" width="112" height="40" rx="3" fill="#fff" stroke="#b4541a"/><text x="238" y="331">Plan in pack</text>
+    <rect x="306" y="306" width="112" height="40" rx="3" fill="#fff" stroke="#b4541a" stroke-width="2"/><text x="362" y="331" font-weight="600">Tool gate</text>
+    <rect x="430" y="306" width="112" height="40" rx="3" fill="#fff" stroke="#b4541a"/><text x="486" y="331">Verify</text>
+    <rect x="554" y="306" width="112" height="40" rx="3" fill="#fff" stroke="#b4541a" stroke-width="2"/><text x="610" y="331" font-weight="600">Person approves</text>
+    <rect x="678" y="306" width="112" height="40" rx="3" fill="#fff" stroke="#b4541a"/><text x="734" y="331">Apply</text>
+    <rect x="802" y="306" width="140" height="40" rx="3" fill="#fff" stroke="#b4541a"/><text x="872" y="331">Audit</text>
+  </g>
+  <text x="58" y="374" font-size="11.5">LangGraph graph · FastAPI layer with an OpenAI-compatible endpoint · Postgres checkpoints · knows the user on every call</text>
+  <text x="58" y="393" font-size="11.5" fill="#5b6573">Budgets and loop limits · per-user pack access · retry once, then a code-built answer or a draft marked for review</text>
+
+  <!-- packs -->
+  <text x="40" y="448" font-size="12" font-weight="600" fill="#5b6573" letter-spacing=".05em">PACKS · each declares its tools, checks and approval rules</text>
+  <g font-size="12.5" text-anchor="middle">
+    <rect x="40"  y="458" width="172" height="44" rx="3" fill="#fff" stroke="#b4541a" stroke-width="1.4"/><text x="126" y="485" font-weight="600">policy-impact</text>
+    <rect x="224" y="458" width="172" height="44" rx="3" fill="#fff" stroke="#b4541a" stroke-width="1.4"/><text x="310" y="485" font-weight="600">policy-writing</text>
+    <rect x="408" y="458" width="172" height="44" rx="3" fill="#fff" stroke="#b4541a" stroke-width="1.4"/><text x="494" y="485" font-weight="600">documents</text>
+    <rect x="592" y="458" width="172" height="44" rx="3" fill="#fff" stroke="#b4541a" stroke-width="1.4"/><text x="678" y="485" font-weight="600">spreadsheets</text>
+    <rect x="776" y="458" width="184" height="44" rx="3" fill="#fff" stroke="#b4541a" stroke-dasharray="6 4"/><text x="868" y="485" font-weight="600" fill="#5b6573">connectors (one each)</text>
+  </g>
+  <line x1="500" y1="418" x2="500" y2="454" stroke="#b4541a" stroke-width="1.4" marker-end="url(#ao)"/>
+
+  <!-- engines -->
+  <text x="40" y="538" font-size="12" font-weight="600" fill="#5b6573" letter-spacing=".05em">ENGINES · deterministic code</text>
+  <rect x="40" y="548" width="220" height="118" rx="4" fill="#e5f2ee" stroke="#2f6f5e" stroke-width="1.6"/>
+  <text x="56" y="572" font-size="14" font-weight="600" fill="#2f6f5e">policy-api</text>
+  <text x="56" y="591" font-size="11.5">impact pipeline, /search,</text>
+  <text x="56" y="607" font-size="11.5">review page, signed links</text>
+  <text x="56" y="623" font-size="11.5">row-level security</text>
+  <text x="56" y="652" font-size="11" fill="#5b6573">from policy-impact today</text>
+
+  <rect x="275" y="548" width="220" height="118" rx="4" fill="#e5f2ee" stroke="#2f6f5e" stroke-width="1.6"/>
+  <text x="291" y="572" font-size="14" font-weight="600" fill="#2f6f5e">docs-api</text>
+  <text x="291" y="591" font-size="11.5">build from templates</text>
+  <text x="291" y="607" font-size="11.5">apply accepted edit operations</text>
+  <text x="291" y="623" font-size="11.5">LibreOffice: recalculate, PDF</text>
+  <text x="291" y="652" font-size="11" fill="#5b6573">new</text>
+
+  <rect x="510" y="548" width="220" height="118" rx="4" fill="#e5f2ee" stroke="#2f6f5e" stroke-width="1.6"/>
+  <text x="526" y="572" font-size="14" font-weight="600" fill="#2f6f5e">File store</text>
+  <text x="526" y="591" font-size="11.5">every version kept</text>
+  <text x="526" y="607" font-size="11.5">who changed what, when</text>
+  <text x="526" y="623" font-size="11.5">serves files to the editor</text>
+  <text x="526" y="652" font-size="11" fill="#5b6573">new</text>
+
+  <rect x="745" y="548" width="215" height="118" rx="4" fill="#fff" stroke="#2f6f5e" stroke-dasharray="6 4"/>
+  <text x="761" y="572" font-size="14" font-weight="600" fill="#5b6573">Connectors</text>
+  <text x="761" y="591" font-size="11.5" fill="#5b6573">MCP servers or adapters</text>
+  <text x="761" y="607" font-size="11.5" fill="#5b6573">file shares, ticketing, …</text>
+  <text x="761" y="623" font-size="11.5" fill="#5b6573">read first; writes approved</text>
+
+  <line x1="150" y1="504" x2="150" y2="544" stroke="#2f6f5e" stroke-width="1.4" marker-end="url(#a)"/>
+  <line x1="385" y1="504" x2="385" y2="544" stroke="#2f6f5e" stroke-width="1.4" marker-end="url(#a)"/>
+  <line x1="620" y1="504" x2="620" y2="544" stroke="#2f6f5e" stroke-width="1.4" marker-end="url(#a)"/>
+  <line x1="852" y1="504" x2="852" y2="544" stroke="#2f6f5e" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#a)"/>
+  <path d="M500,224 C500,240 640,240 640,250" fill="none" stroke="none"/>
+
+  <!-- shared -->
+  <text x="40" y="700" font-size="12" font-weight="600" fill="#5b6573" letter-spacing=".05em">SHARED SERVICES</text>
+  <g font-size="11.5">
+    <rect x="40" y="710" width="400" height="58" rx="4" fill="#fff" stroke="#1b2430"/>
+    <text x="56" y="732" font-size="13.5" font-weight="600">vLLM</text>
+    <text x="56" y="752">gpt-oss-120b (assistant, judge) · gpt-oss-20b (small tasks)</text>
+    <rect x="455" y="710" width="200" height="58" rx="4" fill="#fff" stroke="#1b2430"/>
+    <text x="471" y="732" font-size="13.5" font-weight="600">TEI</text>
+    <text x="471" y="752">embeddings + reranker</text>
+    <rect x="670" y="710" width="290" height="58" rx="4" fill="#fff" stroke="#1b2430"/>
+    <text x="686" y="732" font-size="13.5" font-weight="600">Postgres + pgvector</text>
+    <text x="686" y="752">policies, checkpoints, audit, RLS</text>
+  </g>
+</svg>
+<figcaption>Figure 1. Three front ends, one assistant. The assistant reaches engines and connectors only through its own tool gate, and nothing is changed until a person approves it. Dashed boxes come after the pilot.</figcaption>
+</figure>
+<div class="legend">
+  <span><span class="sw" style="background:#fbeee4;border-color:#b4541a"></span>Assistant, Overwatch and packs</span>
+  <span><span class="sw" style="background:#e5f2ee;border-color:#2f6f5e"></span>Deterministic engines</span>
+  <span><span class="sw" style="background:#f3f4f6;border-color:#1b2430"></span>Front ends</span>
+  <span><span class="sw" style="background:#fff;border-color:#1b2430"></span>Shared infrastructure</span>
+</div>
+</section>
+
+<!-- ============ JOBS + EDIT FLOW ============ -->
+<section class="page">
+<h2>What staff can do, and how each stays safe</h2>
+<table>
+  <thead><tr><th style="width:18%">Job</th><th style="width:40%">What happens</th><th>What keeps it right</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Compare policies</strong></td><td>The fixed impact pipeline runs; code builds the answer, table and workbook.</td><td>Unchanged from today: repeatable verdicts, one audit row per model decision.</td></tr>
+    <tr><td><strong>Write a policy</strong></td><td>The assistant drafts from the policy template, section by section, quoting existing policies as sources.</td><td>The draft goes through the <strong>impact check</strong> before it can be published, so conflicts show first. Publishing needs a named approver and creates a new version.</td></tr>
+    <tr><td><strong>Build a document</strong></td><td>The model writes a structured outline; docs-api renders it from an approved template (Word, PDF, PowerPoint).</td><td>Facts, names, dates and figures must come from sources or from the person; branding comes from the template.</td></tr>
+    <tr><td><strong>Build a spreadsheet</strong></td><td>The model supplies the data and layout; <strong>code writes the formulas</strong>.</td><td>LibreOffice recalculates the workbook and the totals are checked before anyone sees it.</td></tr>
+    <tr><td><strong>Edit an open file</strong></td><td>The model suggests edit operations ("replace clause 4.2 with…", "set B7 to =SUM(B2:B6)").</td><td>Shown as tracked changes or highlighted cells. The person clicks <strong>Accept</strong> or <strong>Undo</strong>; every version is kept.</td></tr>
+    <tr><td><strong>Use another tool</strong></td><td>A connector reads from or writes to an outside system.</td><td>Switched on per pack and per user. Reading first; anything that writes or sends needs approval.</td></tr>
+  </tbody>
+</table>
+
+<h3>How an edit works</h3>
+<figure>
+<svg viewBox="0 0 1000 250" role="img" aria-label="Edit flow">
+  <defs>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1b2430"/></marker>
+  </defs>
+  <g font-size="12.5" text-anchor="middle">
+    <rect x="10"  y="30" width="140" height="74" rx="4" fill="#fff" stroke="#1b2430" stroke-width="1.4"/>
+    <text x="80" y="58" font-weight="600">1 Person asks</text><text x="80" y="77" font-size="11" fill="#5b6573">"tighten section 4"</text><text x="80" y="92" font-size="11" fill="#5b6573">"add a Q3 column"</text>
+    <rect x="175" y="30" width="150" height="74" rx="4" fill="#fbeee4" stroke="#b4541a" stroke-width="1.4"/>
+    <text x="250" y="58" font-weight="600">2 Model suggests</text><text x="250" y="77" font-size="11" fill="#5b6573">edit operations (JSON),</text><text x="250" y="92" font-size="11" fill="#5b6573">not a new file</text>
+    <rect x="350" y="30" width="150" height="74" rx="4" fill="#fbeee4" stroke="#b4541a" stroke-width="1.4"/>
+    <text x="425" y="58" font-weight="600">3 Gate + checks</text><text x="425" y="77" font-size="11" fill="#5b6573">valid targets, sources,</text><text x="425" y="92" font-size="11" fill="#5b6573">totals recompute</text>
+    <rect x="525" y="30" width="150" height="74" rx="4" fill="#f3f4f6" stroke="#1b2430" stroke-width="1.4"/>
+    <text x="600" y="58" font-weight="600">4 Preview</text><text x="600" y="77" font-size="11" fill="#5b6573">tracked changes or</text><text x="600" y="92" font-size="11" fill="#5b6573">highlighted cells</text>
+    <rect x="700" y="30" width="130" height="74" rx="4" fill="#fff" stroke="#b4541a" stroke-width="2"/>
+    <text x="765" y="58" font-weight="600">5 Accept?</text><text x="765" y="77" font-size="11" fill="#5b6573">one click,</text><text x="765" y="92" font-size="11" fill="#5b6573">per change or all</text>
+    <rect x="855" y="30" width="135" height="74" rx="4" fill="#e5f2ee" stroke="#2f6f5e" stroke-width="1.4"/>
+    <text x="922" y="58" font-weight="600">6 Code applies</text><text x="922" y="77" font-size="11" fill="#5b6573">new version saved,</text><text x="922" y="92" font-size="11" fill="#5b6573">audit row written</text>
+  </g>
+  <line x1="150" y1="67" x2="171" y2="67" stroke="#1b2430" stroke-width="1.4" marker-end="url(#c)"/>
+  <line x1="325" y1="67" x2="346" y2="67" stroke="#1b2430" stroke-width="1.4" marker-end="url(#c)"/>
+  <line x1="500" y1="67" x2="521" y2="67" stroke="#1b2430" stroke-width="1.4" marker-end="url(#c)"/>
+  <line x1="675" y1="67" x2="696" y2="67" stroke="#1b2430" stroke-width="1.4" marker-end="url(#c)"/>
+  <line x1="830" y1="67" x2="851" y2="67" stroke="#1b2430" stroke-width="1.4" marker-end="url(#c)"/>
+  <text x="840" y="58" font-size="10.5" text-anchor="middle" fill="#2f6f5e">yes</text>
+  <line x1="765" y1="104" x2="765" y2="150" stroke="#1b2430" stroke-width="1.4" marker-end="url(#c)"/>
+  <text x="773" y="132" font-size="10.5" fill="#5b6573">Undo</text>
+  <rect x="660" y="154" width="210" height="48" rx="4" fill="#f3f4f6" stroke="#1b2430"/>
+  <text x="765" y="175" font-size="12" text-anchor="middle" font-weight="600">Nothing changes</text>
+  <text x="765" y="193" font-size="11" text-anchor="middle" fill="#5b6573">the file stays as it was</text>
+  <line x1="425" y1="104" x2="425" y2="150" stroke="#1b2430" stroke-width="1.4" marker-end="url(#c)"/>
+  <text x="433" y="132" font-size="10.5" fill="#5b6573">fails</text>
+  <rect x="300" y="154" width="250" height="48" rx="4" fill="#f3f4f6" stroke="#1b2430"/>
+  <text x="425" y="175" font-size="12" text-anchor="middle" font-weight="600">Retry once, then explain</text>
+  <text x="425" y="193" font-size="11" text-anchor="middle" fill="#5b6573">no broken suggestion is shown</text>
+  <text x="922" y="135" font-size="11" text-anchor="middle" fill="#5b6573">Earlier versions</text>
+  <text x="922" y="151" font-size="11" text-anchor="middle" fill="#5b6573">can be restored</text>
+  <text x="922" y="167" font-size="11" text-anchor="middle" fill="#5b6573">at any time</text>
+</svg>
+<figcaption>Figure 2. The model never writes the file. It suggests operations, code checks and shows them, a person accepts, and code applies them as a new version.</figcaption>
+</figure>
+</section>
+
+<!-- ============ EDITOR OPTIONS ============ -->
+<section class="page">
+<h2>Where staff edit: three options</h2>
+<p>This is the decision that shapes the front end. The assistant, packs and engines are the same in all three; only where the file opens changes.</p>
+<table>
+  <thead><tr><th style="width:22%">Option</th><th style="width:26%">What staff see</th><th style="width:26%">Strengths</th><th>Watch out for</th></tr></thead>
+  <tbody>
+    <tr><td><strong>1. Browser editor on our server</strong> (OnlyOffice Docs or Collabora Online) <br><em>Recommended for the pilot</em></td><td>Word and Excel files open in a browser tab next to the chat</td><td>Fully inside the sealed network; co-editing; APIs to show and apply changes; OnlyOffice's AI plugin can point at our assistant</td><td>OnlyOffice Community is free (AGPL plus attribution terms) and no longer capped at 20 connections since 9.4; Collabora's free CODE edition is not for production, which needs a subscription</td></tr>
+    <tr><td><strong>2. Office add-in in desktop Word and Excel</strong></td><td>An assistant pane inside the Word or Excel they already use</td><td>No new editor to learn; works on the internal network when the add-in is hosted on our proxy</td><td>Needs an internal HTTPS certificate and deployment by the client's IT; more front-end work; depends on Office versions in use</td></tr>
+    <tr><td><strong>3. Microsoft 365 online</strong> (Excel Online, SharePoint, OneDrive)</td><td>The familiar Microsoft web apps</td><td>Most familiar; files already live there for many clients</td><td>Files and Microsoft Graph calls leave the sealed network. This is a policy decision for the client, not a technical one</td></tr>
+  </tbody>
+</table>
+<div class="callout">
+  <strong>Recommendation.</strong> Start with option 1 for the pilot, because it keeps the sealed network intact and needs no help from the client's IT. Add option 2 for staff who live in desktop Excel. Consider option 3 only if the client confirms that their data may be held in Microsoft 365.
+</div>
+
+<h2>Packs</h2>
+<table>
+  <thead><tr><th style="width:17%">Pack</th><th style="width:33%">Tools (examples)</th><th style="width:30%">Checks</th><th>Needs approval</th></tr></thead>
+  <tbody>
+    <tr><td>policy-impact</td><td>search, find policy, run check, get result, make files</td><td>citations exist; claims match verdicts</td><td>no (read-only)</td></tr>
+    <tr><td>policy-writing</td><td>search, draft section, run impact check on draft, submit for approval</td><td>every rule cites a source or is marked new; impact check run on the final draft</td><td>publishing a new version</td></tr>
+    <tr><td>documents</td><td>make document, suggest edits, export PDF</td><td>no invented names, dates or amounts; template used</td><td>applying edits</td></tr>
+    <tr><td>spreadsheets</td><td>make workbook, suggest cell and formula edits, recalculate</td><td>totals recompute; formulas written by code; no hard-coded results</td><td>applying edits</td></tr>
+    <tr><td>connectors</td><td>one per outside tool, read first</td><td>allowed per user; results cited</td><td>any write or send</td></tr>
+  </tbody>
+</table>
+</section>
+
+
+<!-- ============ RESEARCH ============ -->
+<section class="page">
+<h2>Research: document editors (October 2026)</h2>
+<p>We compared the self-hosted editors that could sit next to the chat. Versions and licence facts were checked on 20 October 2026; prices and anything marked <em>unverified</em> must be confirmed with the vendor before purchase.</p>
+<table>
+  <thead><tr><th style="width:17%">Editor</th><th style="width:22%">Licence and cost</th><th style="width:21%">Word and Excel fidelity</th><th style="width:22%">Hooks for the assistant</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td><strong>ONLYOFFICE Docs</strong><br>10.0.0, 12 Oct 2026</td><td>Community: free, AGPL v3 plus attribution and labelling terms; 20-connection cap removed in 9.4. Enterprise or Developer: annual licence for support and extras</td><td>Built on Microsoft's own file formats (.docx, .xlsx) natively; the strongest of the options</td><td>Document Builder, plugins and connector APIs; AI plugin with custom assistants and local models</td><td><strong>Recommended</strong> for the pilot</td></tr>
+    <tr><td><strong>Collabora Online</strong><br>26.04 (Oct 2026)</td><td>CODE edition free but not for production; production needs a subscription (price unverified)</td><td>LibreOffice engine: excellent for ODF, good but less exact for .docx and .xlsx; Excel formula fidelity unverified</td><td>WOPI, Python (UNO) scripting; 26.04 added a "manage tracked changes only" mode</td><td>Fallback if OnlyOffice fails a spike</td></tr>
+    <tr><td><strong>Euro-Office</strong></td><td>Open-source fork of ONLYOFFICE (Nextcloud, IONOS, Proton), March 2026</td><td>Same engine as ONLYOFFICE</td><td>Unverified</td><td>Watch only: 1.0 not confirmed and a dispute with ONLYOFFICE's owner is open</td></tr>
+    <tr><td><strong>Univer</strong></td><td>Apache-2.0 core; collaboration and .xlsx import/export need a paid Pro key</td><td>Spreadsheets only; no Word-style tracked changes</td><td>Strong programming model, but we would build the editor screens</td><td>Only for a custom spreadsheet screen later</td></tr>
+    <tr><td><strong>Microsoft Office Online Server</strong></td><td>Retired; support ends 31 Dec 2026</td><td>—</td><td>—</td><td>Do not use</td></tr>
+  </tbody>
+</table>
+
+<div class="grid2 avoid">
+  <div class="card">
+    <h3>Recommendation</h3>
+    <ul>
+      <li><strong>ONLYOFFICE Docs Community 10.0</strong>, self-hosted on the sealed network, for the pilot. Free, unlimited connections, closest to Word and Excel.</li>
+      <li>Keep <strong>our own docs-api</strong> as the way edits are applied, so the assistant does not depend on the editor's AI plugin.</li>
+      <li>Move to ONLYOFFICE Enterprise only if the client wants vendor support or features the free edition lacks.</li>
+      <li><strong>Collabora</strong> is the fallback if a spike below fails.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Rest of the stack, checked</h3>
+    <ul>
+      <li><strong>LangGraph 1.2.16</strong> (16 Oct 2026), MIT licence; Postgres checkpointer 3.2.0. Tracing is off unless <code>LANGSMITH_TRACING=true</code> is set.</li>
+      <li><strong>Open WebUI 0.12.3</strong> takes any OpenAI-compatible endpoint. Keeping its branding avoids the licence's 50-user limit on rebranding.</li>
+      <li><strong>vLLM 0.32</strong> runs gpt-oss-120b tool calls with <code>--tool-call-parser openai --enable-auto-tool-choice</code>. A reported parser issue (#58825) can turn stray text into a fake tool call; the gate must reject unknown tool names.</li>
+      <li><strong>Office add-in:</strong> Word's tracked-changes API exists, but offline loading of office.js and IT deployment paths are unverified. Kept for after the pilot.</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<!-- ============ SPIKES ============ -->
+<section class="page">
+<h2>R&amp;D: test the hardest parts first</h2>
+<p>Five short experiments run before the main build. Each has a pass mark set now, and a fixed fallback if it fails, so the plan changes on evidence rather than opinion.</p>
+<table>
+  <thead><tr><th style="width:4%">#</th><th style="width:24%">Experiment</th><th style="width:30%">Passes when</th><th style="width:28%">If it fails</th><th>Time</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>Tracked changes round trip.</strong> The assistant suggests edits to a real policy .docx; they show in ONLYOFFICE as tracked changes, are accepted there, and still look right in desktop Word</td><td>10 of 10 test edits show correctly in both editors, with the right author and no lost formatting</td><td>docs-api writes the tracked changes into the file itself, and the editor reloads it; if that also fails, try Collabora</td><td>2 days</td></tr>
+    <tr><td>2</td><td><strong>Excel fidelity.</strong> Open and save 20 real client workbooks in ONLYOFFICE</td><td>All formulas, named ranges, conditional formatting and pivot tables survive; recalculated totals match Excel</td><td>Edit in desktop Excel through the add-in for workbooks that fail; record which features break</td><td>2 days</td></tr>
+    <tr><td>3</td><td><strong>Sealed network.</strong> Run ONLYOFFICE, Open WebUI and the assistant with all outbound traffic blocked and logged</td><td>Zero outbound connection attempts over a day of use, including start-up and licence checks</td><td>Block at the firewall and document each attempt; replace any part that will not work without the internet</td><td>1 day</td></tr>
+    <tr><td>4</td><td><strong>Model reliability.</strong> 30 editing and drafting tasks through the assistant on gpt-oss-120b</td><td>At least 90% produce valid edit operations first time; 100% caught by the gate when invalid</td><td>Narrow each task to fewer tool calls, add worked examples, or try LangChain's <code>create_agent</code> against a hand-written graph</td><td>3 days</td></tr>
+    <tr><td>5</td><td><strong>Policy writing end to end.</strong> Draft one real policy update, run the impact check on it, approve and publish</td><td>A policy owner says the draft saved them time and the impact check found the known conflicts</td><td>Keep the assistant to section-by-section suggestions only, without whole-policy drafts</td><td>2 days</td></tr>
+  </tbody>
+</table>
+<div class="callout">
+  <strong>About two weeks of R&amp;D.</strong> Spikes 1 to 3 decide the editor; spike 4 decides how much the assistant does on its own; spike 5 checks that the whole idea is worth building. If spikes 1 and 2 both fail for ONLYOFFICE and Collabora, the editor moves to the Office add-in and the pilot waits for the client's IT.
+</div>
+
+<h3>Sources</h3>
+<ul style="font-size:8.6pt;color:#5b6573">
+  <li>ONLYOFFICE DocumentServer releases (github.com/ONLYOFFICE/DocumentServer/releases): v10.0.0, 12 Oct 2026; v9.4.0, 19 May 2026. Connection cap removal: linuxiac.com, 20 May 2026. AI plugin: onlyoffice.com blog (May 2025, Jan 2026).</li>
+  <li>Collabora Online CODE 26.04 release notes and 26.04 release blog (collaboraonline.com); The Register, 25 Jun 2026 (CODE not for production) and 2 Apr 2026 (Euro-Office).</li>
+  <li>Univer (github.com/dream-num/univer). Office Online Server retirement: petri.com.</li>
+  <li>PyPI: langgraph 1.2.16, langgraph-checkpoint-postgres 3.2.0, open-webui 0.12.3 (licence clause 4), vllm 0.32.0. docs.vllm.ai tool calling; vLLM issue #58825; LangGraph observability docs; Microsoft Word API requirement sets.</li>
+  <li>Unverified: Collabora subscription price; Euro-Office 1.0; ONLYOFFICE AI plugin writing tracked changes; office.js offline hosting; Excel API requirement sets; gpt-oss multi-step reliability.</li>
+</ul>
+</section>
+
+<!-- ============ BUILD, CARRY OVER, TESTS ============ -->
+<section class="page">
+<h2>What carries over from policy-impact</h2>
+<ul>
+  <li><strong>Keep:</strong> the impact pipeline, Postgres with row-level security, the review page, signed downloads, the evaluation set, the containment scripts and internal networks.</li>
+  <li><strong>Becomes part of the assistant:</strong> the model gate (approved prompt, temperature 0, one tool call at a time) and the user scope from Open WebUI, now passed directly instead of through a signed token in the chat.</li>
+  <li><strong>Removed:</strong> the Hermes container, its plugin, its read-only configuration and its checksum service.</li>
+</ul>
+
+<h2>Build order</h2>
+<table>
+  <thead><tr><th style="width:4%">#</th><th style="width:38%">Step</th><th>Passes when</th></tr></thead>
+  <tbody>
+    <tr><td>0</td><td>R&amp;D spikes 1 to 5 (about two weeks)</td><td>Each meets its pass mark, or its fallback is chosen</td></tr>
+    <tr><td>1</td><td>Assistant core: LangGraph graph, OpenAI-compatible endpoint, gate, audit; Open WebUI pointed at it</td><td>Chat works with the internet cut; the gate refuses unknown, out-of-order and over-budget calls</td></tr>
+    <tr><td>2</td><td>policy-impact pack on the new core</td><td>The evaluation cases give the same verdicts as the Hermes build</td></tr>
+    <tr><td>3</td><td>File store and document editor (option 1)</td><td>A staff member opens, edits and saves a Word and an Excel file; every version is kept</td></tr>
+    <tr><td>4</td><td>documents and spreadsheets packs, with suggested edits</td><td>Suggestions show as tracked changes or highlighted cells; Accept applies them, Undo leaves the file unchanged; totals recompute</td></tr>
+    <tr><td>5</td><td>policy-writing pack</td><td>A draft policy runs through the impact check and can only be published by a named approver</td></tr>
+    <tr><td>6</td><td>Pilot</td><td>All tests below pass</td></tr>
+    <tr><td>7</td><td>Later: Office add-in, then connectors one by one</td><td>Each passes its own pack evaluation before it is switched on</td></tr>
+  </tbody>
+</table>
+
+<div class="avoid">
+<h2>Tests before the pilot</h2>
+<ol>
+  <li><strong>Same verdicts:</strong> impact results match the current build on the evaluation cases.</li>
+  <li><strong>No silent edits:</strong> no file changes without an Accept, and Undo always leaves the file as it was.</li>
+  <li><strong>Numbers:</strong> every total in a generated or edited workbook recomputes to the same value; no formula results typed in by the model.</li>
+  <li><strong>Sources:</strong> every policy id and section cited exists; documents contain no names, dates or amounts that were not supplied.</li>
+  <li><strong>Access:</strong> a user cannot see or edit another unit's policies or files (row-level security and file store both checked).</li>
+  <li><strong>Containment:</strong> no connection leaves the server from any container, the editor included.</li>
+  <li><strong>Runaway:</strong> a request built to loop stops at the budget with a clear message.</li>
+  <li><strong>No-help test:</strong> a staff member writes a short policy, builds a workbook and accepts an edit without help.</li>
+</ol>
+</div>
+
+<h2 class="page">Check first, and open questions</h2>
+<ul>
+  <li><strong>Where do staff edit today:</strong> desktop Word and Excel, Microsoft 365 online, or both? This picks the front end.</li>
+  <li><strong>Can data live in Microsoft 365?</strong> If not, option 3 is off the table.</li>
+  <li><strong>Editor licence:</strong> confirm OnlyOffice's Community terms (attribution and labelling of modified versions) with counsel, or budget for its Enterprise edition if support is needed.</li>
+  <li><strong>LangGraph agent helpers:</strong> LangChain 1.x presents <code>create_agent</code> with approval middleware; whether to use it or a hand-written graph is decided in spike 4.</li>
+  <li><strong>Model reliability:</strong> measured in spike 4 before the main build.</li>
+  <li><strong>Which outside tools first:</strong> name the first one or two connectors so their packs can be designed.</li>
+</ul>
+</section>
+
+</body>
+</html>

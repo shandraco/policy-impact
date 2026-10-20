@@ -1,0 +1,10 @@
+{
+  "about": "Known answers for the sample store. Copy this file into eval/private/ and write cases from your own past policy changes; that folder is git-ignored.",
+  "policy": "DOE-512",
+  "cases": [
+    {"entity": "lincoln-elementary", "requirement": "lockers for the whole school day", "expect": "conflict"},
+    {"entity": "roosevelt-high", "requirement": "lockers for the whole school day", "expect": "compliant"},
+    {"entity": "westside-charter", "requirement": "lockers for the whole school day", "expect": "gap"},
+    {"entity": "district-a", "requirement": "§3.2", "expect": "stale_reference"}
+  ]
+}

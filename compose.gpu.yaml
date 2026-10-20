@@ -1,0 +1,55 @@
+# The local models. All US-made: OpenAI gpt-oss (Apache-2.0) and Nomic embeddings (Apache-2.0).
+# Weights are downloaded once with scripts/fetch_models.sh and read from ./models; the model containers
+# have no internet. Card numbers below fit 3 x A6000 with cards 0 and 1 on an NVLink bridge.
+#   2 cards: drop "chat", set CHAT_URL=http://judge:8000/v1 and CHAT_MODEL=judge in .env.
+#   4 cards: run a second judge on card 3 and point ESCALATE_URL at it, or keep it for ingest.
+x-vllm: &vllm
+  image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.10.2}
+  restart: unless-stopped
+  ipc: host
+  environment:
+    HF_HUB_OFFLINE: "1"
+    VLLM_NO_USAGE_STATS: "1"
+    DO_NOT_TRACK: "1"
+  volumes:
+    - ./models:/models:ro
+  networks: [models]
+
+services:
+  judge:                       # gpt-oss-120b over two cards: extraction and judging
+    <<: *vllm
+    command: ["--model", "/models/gpt-oss-120b", "--served-model-name", "judge", "--tensor-parallel-size", "2",
+              "--max-model-len", "32768", "--gpu-memory-utilization", "0.92", "--api-key", "${LLM_API_KEY}"]
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, device_ids: ["0", "1"], capabilities: [gpu]}]
+
+  chat:                        # gpt-oss-20b: the chat model behind Hermes, only ever reached through the model gate
+    <<: *vllm
+    command: ["--model", "/models/gpt-oss-20b", "--served-model-name", "chat", "--max-model-len", "16384",
+              "--gpu-memory-utilization", "0.55", "--enable-auto-tool-choice", "--tool-call-parser", "openai",
+              "--api-key", "${LLM_API_KEY}"]
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, device_ids: ["2"], capabilities: [gpu]}]
+
+  embed:                       # nomic-embed-text-v1.5, 768 numbers per clause; shares card 2 with chat
+    image: ${TEI_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:86-1.8}
+    restart: unless-stopped
+    command: ["--model-id", "/models/nomic-embed-text-v1.5", "--port", "80"]
+    environment:
+      HF_HUB_OFFLINE: "1"
+    volumes:
+      - ./models:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, device_ids: ["2"], capabilities: [gpu]}]
+    networks: [models]
+
+  policy-api:
+    environment: {FAKE_MODELS: "0"}
+  worker:
+    environment: {FAKE_MODELS: "0"}
